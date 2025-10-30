@@ -135,6 +135,65 @@
 
     
     <script>__loadEntry()</script>
+
+    <!-- Hook para detectar el último Continuar/Finalizar de Rise y desbloquear Next en Storyline -->
+<script>
+(function () {
+  // Enviamos al padre (Storyline) el desbloqueo
+  function unlockNext() {
+    try { window.parent.postMessage({ type: 'UNLOCK_NEXT' }, '*'); } catch (e) {}
+  }
+
+  // ¿Este botón es el último "Continuar" visible en la pantalla?
+  function isLastVisibleContinue(btn) {
+    const visibles = Array.from(document.querySelectorAll('button.continue-btn[data-continue-btn]'))
+      .filter(b => b.offsetParent !== null);
+    return visibles.length > 0 && visibles[visibles.length - 1] === btn;
+  }
+
+  // Handler de click
+  function onContinueClick(e) {
+    const btn = e.currentTarget;
+    const label = (btn.textContent || '').trim().toLowerCase();
+
+    const looksFinal =
+      /finaliz/.test(label)           // “Finalizar”, “Finaliza”, etc.
+      || isLastVisibleContinue(btn);  // o es el último Continuar visible
+
+    if (looksFinal) {
+      // Pequeño delay para que Rise haga su scroll/cambio de estado
+      setTimeout(unlockNext, 200);
+    }
+  }
+
+  // Cablear listeners a todos los botones de continuar que existan/entren
+  function wireButtons(root = document) {
+    const candidates = root.querySelectorAll('button.continue-btn[data-continue-btn]');
+    candidates.forEach(btn => {
+      if (btn.__wired) return;
+      btn.__wired = true;
+      btn.addEventListener('click', onContinueClick);
+    });
+  }
+
+  // Inicial
+  wireButtons();
+
+  // Observar el DOM porque Rise es SPA y mete contenido dinámico
+  const mo = new MutationObserver(muts => {
+    for (const m of muts) {
+      if (!m.addedNodes) continue;
+      m.addedNodes.forEach(n => {
+        if (n.nodeType !== 1) return;
+        // Cablea si aparecen botones nuevos o contenedores con ellos
+        if (n.matches?.('button.continue-btn[data-continue-btn]')) wireButtons(n);
+        else wireButtons(n);
+      });
+    }
+  });
+  mo.observe(document.documentElement, { childList: true, subtree: true });
+})();
+</script>
     
   </body>
 </html>
